@@ -1,0 +1,149 @@
+---
+title: "Predicting the quality of the exercise"
+author: "Juan José Rincón "
+date: "Wednesday, August 20, 2014"
+output: html_document
+---
+
+
+## Introduction
+
+This report explains the generation of a prediction model of the quality of the exercise based on the information provided by devices such as Jawbone Up, Nike FuelBand, and Fitbit. It is part of the Practical Machine Learning Course of the Johns Hopkins University given through Coursera.
+
+The raw information has been obtained from:
+
+Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.
+
+## Data preprocessing
+
+First of all, load required libraries and remove warnings to avoid unwanted text in the output. In addition, for the sake of reproducibility a seed is fixed.
+```{r InitOptions, warning=FALSE}
+options (warn=-1) ## Avoids printing warns in the final text 
+options(scipen=999) ## Avoids scientific notation
+library(ggplot2)
+library(lattice)
+library(caret)
+library(RANN)
+set.seed(1492)
+```
+
+Secondly, it is proceeded to load the data from the csv files (training and validation sets), previously downloaded from the Coursera web page.
+
+```{r LoadFile}
+train_ori <- read.table("pml-training.csv", header=T, sep = ",")
+validation_ori <- read.table("pml-testing.csv", header=T, sep = ",")
+```
+
+During the preprocessing it is important to reduce to number of variables to simplify the train workload. Some of the variables of the set record the user or time. This variables are not useful for predicting future results and also are really good predictor as the data was generated specifically to test the models. This variables are "X", "user_name", "raw_timestamp_part_1", "raw_timestamp_part_2", "cvtd_timestamp", "new_window" and "num_window".
+
+Additionally, it is a good practice to remove variables with almost no variance in their data, as they will result in poor predictors that would slow the process.
+
+```{r VarNoNeeded, cache = TRUE}
+train <- train_ori[,-c(1,2,3,4,5,6,7)] # Delete the id, name and date related attributes (no relation with the model)
+nzc <- nearZeroVar(train, saveMetrics=TRUE) # Remove the variables without much variation
+train <- train[,nzc$nzv==FALSE]
+```
+
+Finally, there is a large number of variables almost fill with NA that will create problems in the prediction model (e.g. most of them are NA for every observation in the validation set, so no prediction could be obtain from them).
+
+```{r removeNA, cache = TRUE}
+isNA <- apply(train, 2, function(x) { sum(is.na(x)) })
+train <- subset(train[, which(isNA == 0)])
+```
+
+During the preprocessing period, it could also be good practice to fillNA and remove variables that are highly correlated with others (as they do not possess more information). This task could be perform with the following code, even though they have not been used in the final prediction model.
+
+```{r otherPre, eval=FALSE}
+trainClasse <- train$classe
+train <- train[, -94]
+
+preProcValues <- preProcess(train, method="knnImpute")
+train <- predict(preProcValues, train)
+
+descrCor <- cor(train, use="pairwise.complete.obs")
+highCorr <- sum(abs(descrCor[upper.tri(descrCor)]) > 0.999)
+highlyCorDescr <- findCorrelation(descrCor, cutoff = 0.75)
+train <- train[, -highlyCorDescr]
+train$classe <- trainClasse
+```
+Note: Take into account that "knnImpute" method performs in addition the "center" and "scale" methods.
+
+The same procedure applied to the train set should be apply to the validation set.
+
+```{r valPreProc}
+validation <- validation_ori[,-c(1,2,3,4,5,6,7)] # Delete the id, name and date related attributes (no relation with the model)
+validation <- validation[,nzc$nzv==FALSE] #Remove variables near zero variance
+```
+
+Finally, to clear the memory, it is a good practice to remove from memory the unused variables
+```{r}
+rm(isNA); rm(nzc)
+```
+
+## Cross checking
+
+As requested in the assignment, the train data is split between the training and testing sets. As there is already a separate validation set, following the recommendations of the course the data is divided in 60% for the training set and 40% for the testing set.
+
+```{r CrossChecking}
+inTraining <- createDataPartition(train$classe, p = 0.6, list = FALSE)
+training <- train[ inTraining,]
+testing <- train[-inTraining,]
+```
+
+In fact, as the model to be used is a random forest, it is not necessary to perform an explicit cross validation, as it is already perform within the model (http://www.stat.berkeley.edu/~breiman/RandomForests/cc_home.htm#ooberr)
+
+
+## Training a prediction model
+
+In this report a random forest is selected as approach, due to the great accuracy of this models. Additionally, to perform and internal cross checking the function "trainControl" is used (as recommended in the discussion forum). Finally, a prediction for the testing test is performed.
+
+```{r trainModandPred, cache=TRUE, message=FALSE, warning=FALSE}
+set.seed(1714)
+ctrl <- trainControl(allowParallel=TRUE, method="cv", number=4)
+modFit <- train(classe ~ ., data=training, model="rf", trControl=ctrl)
+modFit
+predMod <- predict(modFit, newdata=testing)
+```
+
+The model is quite accurate (`r sum(predMod == testing$classe) *100 / length(predMod)`% accuracy). The erroneous assignments could be seen in the following confusion matrix
+
+```{r checkPred}
+confusionMatrix(testing$classe, predMod)$table
+```
+
+As it is requested in the other part of the assignment, the following code predict the outcomes for the 20 observations in the validation test.
+
+```{r predVal}
+predModVal <- predict(modFit, newdata=validation)
+predModVal
+```
+
+Finally, the following table contains the information regarding the most important variables (in order) of the prediction model.
+
+```{r listVar}
+varImp(modFit)
+```
+
+It seems clear that the first 5 variables are more important than the others and there is a gap after the fifth one. Therefore, to try to find a parsimonious model, a simpler model based only in these variables is going to be estimated and test its accuracy.
+
+## Parsimonious model
+
+As explained before, the new model focus in the 5 top predictors. Basically, the previous approach is followed.
+
+```{r subModel, cache=TRUE, message=FALSE}
+trainSmall <- subset(train, 
+                    select=c(roll_belt, pitch_forearm, yaw_belt, magnet_dumbbell_z, roll_forearm,classe))
+modFitSmall <- train(classe~., data=trainSmall[inTraining,], model="rf", trControl=ctrl)
+smallPred <- predict(modFitSmall, newdata=validation)
+predModSmall <- predict(modFitSmall, newdata=testing)
+```
+
+Sadly, it seems that the first 5 variables are not enough to create a good prediction model as their model accuracy is `r sum(smallPred == testing$classe) * 100 / length(predModSmall)`%. The following confusion matrix shows the differences between the predicted and the real outcome.
+
+```{r subModelPred}
+confusionMatrix(testing$classe, predModSmall)$table
+```
+
+## Conclusions
+
+The random forest model build based on the information provided has a really accuracy in the testing test and a 100% accuracy in the validation test. Even though, the validation test is really small, so it should be expected that the final accuracy when tested in another sets of data would be lower.
