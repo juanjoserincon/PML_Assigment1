@@ -141,7 +141,9 @@ modFit</code></pre>
 ## Accuracy was used to select the optimal model using  the largest value.
 ## The final value used for the model was mtry = 27.</code></pre>
 <pre class="r"><code>predMod &lt;- predict(modFit, newdata=testing)</code></pre>
-<p>The model is quite accurate (99.0568% accuracy). The erroneous assignments could be seen in the following confusion matrix</p>
+<p>The model is quite accurate with a 0.9432% of out of sample error (see the following code for the formulae). The erroneous assignments could be seen in the following confusion matrix</p>
+<pre class="r"><code>100 - (sum(predMod == testing$classe) *100 / length(predMod))</code></pre>
+<pre><code>## [1] 0.9432</code></pre>
 <pre class="r"><code>confusionMatrix(testing$classe, predMod)$table</code></pre>
 <pre><code>##           Reference
 ## Prediction    A    B    C    D    E
@@ -195,7 +197,7 @@ modFit</code></pre>
 modFitSmall &lt;- train(classe~., data=trainSmall[inTraining,], model=&quot;rf&quot;, trControl=ctrl)
 smallPred &lt;- predict(modFitSmall, newdata=validation)
 predModSmall &lt;- predict(modFitSmall, newdata=testing)</code></pre>
-<p>Sadly, it seems that the first 5 variables are not enough to create a good prediction model as their model accuracy is 22.1642%. The following confusion matrix shows the differences between the predicted and the real outcome.</p>
+<p>Sadly, it seems that the first 5 variables are not enough to create a good prediction model as their model accuracy (out of sample model) is 77.8358% of out of sample error. The following confusion matrix shows the differences between the predicted and the real outcome.</p>
 <pre class="r"><code>confusionMatrix(testing$classe, predModSmall)$table</code></pre>
 <pre><code>##           Reference
 ## Prediction    A    B    C    D    E

@@ -105,9 +105,10 @@ modFit
 predMod <- predict(modFit, newdata=testing)
 ```
 
-The model is quite accurate (`r sum(predMod == testing$classe) *100 / length(predMod)`% accuracy). The erroneous assignments could be seen in the following confusion matrix
+The model is quite accurate  with a `r 100 - (sum(predMod == testing$classe) *100 / length(predMod))`% of out of sample error (see the following code for the formulae). The erroneous assignments could be seen in the following confusion matrix
 
 ```{r checkPred}
+100 - (sum(predMod == testing$classe) *100 / length(predMod))
 confusionMatrix(testing$classe, predMod)$table
 ```
 
@@ -138,7 +139,7 @@ smallPred <- predict(modFitSmall, newdata=validation)
 predModSmall <- predict(modFitSmall, newdata=testing)
 ```
 
-Sadly, it seems that the first 5 variables are not enough to create a good prediction model as their model accuracy is `r sum(smallPred == testing$classe) * 100 / length(predModSmall)`%. The following confusion matrix shows the differences between the predicted and the real outcome.
+Sadly, it seems that the first 5 variables are not enough to create a good prediction model as their model accuracy (out of sample model) is `r 100 - (sum(smallPred == testing$classe) * 100 / length(predModSmall))`% of out of sample error. The following confusion matrix shows the differences between the predicted and the real outcome.
 
 ```{r subModelPred}
 confusionMatrix(testing$classe, predModSmall)$table
